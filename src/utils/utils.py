@@ -7,6 +7,7 @@ import zipfile
 import cv2
 import requests
 import numpy as np
+import torch
 
 def download_and_unzip(url: str, destination: str):
   """Downloads and unzips a .zip file to a destination.
@@ -134,3 +135,11 @@ def get_video_frames(data_item: Dict[str, Any],
   vid_frames = load_mp4_to_frames(video_file)
   assert data_item['metadata']['num_frames'] == vid_frames.shape[0]
   return vid_frames
+
+
+def get_mask(lengths, max_length, device):
+  """Computes a batch of padding masks given batched lengths"""
+  mask = 1 * (
+    torch.arange(max_length).unsqueeze(1).to(device) < lengths
+  ).transpose(0, 1)
+  return mask

@@ -16,6 +16,7 @@ image = Image.open(requests.get(url, stream=True).raw)
 image.save("new_image.jpg")
 image = Image.open("new_image.jpg")
 
+# return {'pixel_values': tensor, 'input_ids': tensor, 'attention_mask': tensor, 'image_embeds_position_mask': tensor}
 inputs = processor(text=prompt, images=image, return_tensors="pt")
 
 generated_ids = model.generate(

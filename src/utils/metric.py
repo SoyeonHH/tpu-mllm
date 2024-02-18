@@ -1,7 +1,7 @@
 from typing import List, Dict, Any, Tuple
 import numpy as np
 import os
-from categories import *
+from utils.categories import *
 
 def calc_top1(answers_dict: Dict[str, Any],
               db_dict: Dict[str, Any]) -> float:
