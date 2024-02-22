@@ -1,5 +1,5 @@
 import os
-os.environ["PJRT_DEVICE"] = "TPU"
+# os.environ["PJRT_DEVICE"] = "TPU"
 
 import requests
 from PIL import Image
@@ -12,8 +12,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import torch_xla.core.xla_model as xm
-import torch_xla.runtime as xr 
 
 from torch.utils.data import DataLoader
 from transformers import AutoProcessor, AutoModelForVision2Seq
@@ -25,9 +23,9 @@ from models.baseline import FreqMCVQABaseline
 def main():
 
     # Load the dataset
-    data_path = "/data/tpu-mllm/data/annotated_test.json"
-    video_path = "/data/perception_test/mc-vqa/train_videos"
-    audio_path = "/data/perception_test/mc-vqa/train_audios"
+    data_path = "/home/soyeon/workspace/perception-test/data/all_valid.json"
+    video_path = "/home/soyeon/workspace/perception-test/data/valid_videos"
+    audio_path = "/home/soyeon/workspace/perception-test/data/valid_audios"
 
     with open(data_path, "r") as f:
         pt_db_dict = json.load(f)
@@ -38,7 +36,8 @@ def main():
     model = AutoModelForVision2Seq.from_pretrained("microsoft/kosmos-2-patch14-224")
     processor = AutoProcessor.from_pretrained("microsoft/kosmos-2-patch14-224")
 
-    device = xm.xla_device()
+    # Set the device
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     
     # Evaluate the model
@@ -63,6 +62,7 @@ def main():
             prompt = f"<s> {video_prompt} {question}</s>"
             # inputs = processor(images=video_frames, text=question, return_tensors="pt")
             inputs = process_interleaved_example(processor, prompt, images=video_frames, return_tensors="pt")
+            inputs = {k: v.to(device) for k, v in inputs.items()}
 
             # model inference
             generated_ids = model.generate(
@@ -86,7 +86,7 @@ def main():
         answers[video_id] = video_answers
 
         # save the answers
-        with open("/data/tpu-mllm/answers.json", "w") as f:
+        with open("/home/soyeon/workspace/perception-test/result/answers.json", "w") as f:
             json.dump(answers, f, indent=4)
     
     # Evaluate the model

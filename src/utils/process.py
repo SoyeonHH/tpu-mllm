@@ -1,5 +1,21 @@
 from transformers import BatchFeature
 
+"""
+reference: https://huggingface.co/microsoft/kosmos-2-patch14-224/discussions/1
+
+Text format in Kosmos-1:
+- "<s> KOSMOS -1 can perceive multimodal input, learn in context, and generate output. </s>"
+
+Image-Caption format in Kosmos-1:
+- "<s> <image> Image Embedding </image> WALL-E giving potted plant to EVE. </s>"
+
+Multimodal format in Kosmos-1:
+- "<s> <image> Image Embedding </image> This is WALL-E. <image> Image Embedding </image> This is EVE. </s>"
+
+Multimodal Grounding format in Kosmos-2:
+- “<s><image> Image Embedding </image><grounding>...”, where “<grounding>” is used to prompt the model to generate locations tokens.
+
+"""
 
 def process_interleaved_example(processor, prompt, images, placeholder="<i>", num_image_tokens=64, add_special_tokens=True, add_eos_token=False, return_tensors=None):
 
