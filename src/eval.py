@@ -1,6 +1,5 @@
 import os
-# os.environ["PJRT_DEVICE"] = "TPU"
-
+import argparse
 import requests
 from PIL import Image
 from typing import List, Dict, Any, Tuple
@@ -20,12 +19,33 @@ from data_loader import PerceptionDataset
 from models.baseline import FreqMCVQABaseline
 
 
+def get_args():
+    parser = argparse.ArgumentParser(description="Perception Test")
+    parser.add_argument("--data_path", type=str, default="/data1/soyeon/perception-test/data/all_valid.json")
+    parser.add_argument("--video_path", type=str, default="/data1/soyeon/perception-test/data/valid_videos")
+    parser.add_argument("--audio_path", type=str, default="/data1/soyeon/perception-test/data/valid_audios")
+
+    # model
+    parser.add_argument("--model_name", type=str, default="microsoft/kosmos-2-patch14-224")
+    parser.add_argument("--frame_num", type=int, default=16)
+    parser.add_argument("--max_new_tokens", type=int, default=128)
+    parser.add_argument("--frame_sampling", type=str, default="uniform")
+
+    args = parser.parse_args()
+
+    args.output_path = f"/data1/soyeon/perception-test/result/{args.model_name}/{args.frame_sampling}_{args.frame_num}f.json"
+
+    return args
+
+
 def main():
 
+    args = get_args()
+
     # Load the dataset
-    data_path = "/home/soyeon/workspace/perception-test/data/all_valid.json"
-    video_path = "/home/soyeon/workspace/perception-test/data/valid_videos"
-    audio_path = "/home/soyeon/workspace/perception-test/data/valid_audios"
+    data_path = args.data_path
+    video_path = args.video_path
+    audio_path = args.audio_path
 
     with open(data_path, "r") as f:
         pt_db_dict = json.load(f)
@@ -33,11 +53,11 @@ def main():
     dataset = PerceptionDataset(pt_db_dict, video_path, "mc_question", "test")
 
     # Load the model
-    model = AutoModelForVision2Seq.from_pretrained("microsoft/kosmos-2-patch14-224")
-    processor = AutoProcessor.from_pretrained("microsoft/kosmos-2-patch14-224")
+    model = AutoModelForVision2Seq.from_pretrained(args.model_name)
+    processor = AutoProcessor.from_pretrained(args.model_name)
 
     # Set the device
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     
     # Evaluate the model
@@ -50,10 +70,7 @@ def main():
 
         # video processing
         video_frames = get_video_frames(video_item, video_path)
-        # video_values = processor(images=video_frames, return_tensors="pt")["pixel_values"]
-        # video_values = torch.concat(video_values, dim=0).to(device)
-        # video_len = video_values.size(0)
-        # video_mask = get_mask(video_len, video_values.size(1), device).to(device)
+        video_frames = sample_video_frames(video_frames, args.frame_num, args.frame_sampling)
 
         for q_idx, q in enumerate(video_item['mc_question']):
             # question processing
@@ -74,6 +91,9 @@ def main():
                 use_cache=True,
                 max_new_tokens=128,
             )
+
+            # 
+
             generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
             processed_text = processor.post_process_generation(generated_text, cleanup_and_extract=False)
 
@@ -86,7 +106,7 @@ def main():
         answers[video_id] = video_answers
 
         # save the answers
-        with open("/home/soyeon/workspace/perception-test/result/answers.json", "w") as f:
+        with open(args.output_path, "w") as f:
             json.dump(answers, f, indent=4)
     
     # Evaluate the model

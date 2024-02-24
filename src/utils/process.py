@@ -55,3 +55,17 @@ def process_interleaved_example(processor, prompt, images, placeholder="<i>", nu
     outputs = BatchFeature(data=outputs,tensor_type=return_tensors)
 
     return outputs
+
+
+def get_answer_prob(model, inputs, device, max_new_tokens=128):
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+    generated_ids = model.generate(
+        pixel_values=inputs['pixel_values'],
+        input_ids=inputs['input_ids'],
+        attention_mask=inputs['attention_mask'],
+        image_embeds=None,
+        image_embeds_position_mask=inputs["image_embeds_position_mask"],
+        use_cache=True,
+        max_new_tokens=max_new_tokens,
+    )
+    return generated_ids

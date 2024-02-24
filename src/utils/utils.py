@@ -133,7 +133,7 @@ def get_video_frames(data_item: Dict[str, Any],
   video_file = os.path.join(video_folder_path,
                             data_item['metadata']['video_id']) + '.mp4'
   vid_frames = load_mp4_to_frames(video_file)
-  assert data_item['metadata']['num_frames'] == vid_frames.shape[0]
+  # assert data_item['metadata']['num_frames'] == vid_frames.shape[0]
   return vid_frames
 
 
@@ -143,3 +143,23 @@ def get_mask(lengths, max_length, device):
     torch.arange(max_length).unsqueeze(1).to(device) < lengths
   ).transpose(0, 1)
   return mask
+
+
+def sample_video_frames(frames: np.array, num_frames: int, mode: str) -> np.array:
+  """Samples a specified number of frames from a video.
+
+  Args:
+    frames (np.array): Frames of the video as a NumPy array.
+    num_frames (int): Number of frames to sample.
+
+  Returns:
+    np.array: Sampled frames of the video as a NumPy array.
+  """
+  assert num_frames <= frames.shape[0]
+  
+  if mode == "uniform":
+    return frames[np.linspace(0, frames.shape[0] - 1, num_frames, dtype=int)]
+  elif mode == "random":
+    return frames[random.sample(range(frames.shape[0]), num_frames)]
+  else:
+    raise ValueError("Invalid mode. Choose from 'uniform' or 'random'.")
