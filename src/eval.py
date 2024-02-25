@@ -19,11 +19,16 @@ from data_loader import PerceptionDataset
 from models.baseline import FreqMCVQABaseline
 
 
+PATH_DIR = "/home/soyeon/workspace/perception-test"
+
+
 def get_args():
     parser = argparse.ArgumentParser(description="Perception Test")
-    parser.add_argument("--data_path", type=str, default="/data1/soyeon/perception-test/data/all_valid.json")
-    parser.add_argument("--video_path", type=str, default="/data1/soyeon/perception-test/data/valid_videos")
-    parser.add_argument("--audio_path", type=str, default="/data1/soyeon/perception-test/data/valid_audios")
+    parser.add_argument("--data_path", type=str, default=f"{PATH_DIR}/data/all_valid.json")
+    parser.add_argument("--video_path", type=str, default=f"{PATH_DIR}/data/valid_videos")
+    parser.add_argument("--audio_path", type=str, default=f"{PATH_DIR}/data/valid_audios")
+    parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--device", type=str, default="cuda:0")
 
     # model
     parser.add_argument("--model_name", type=str, default="microsoft/kosmos-2-patch14-224")
@@ -33,7 +38,11 @@ def get_args():
 
     args = parser.parse_args()
 
-    args.output_path = f"/data1/soyeon/perception-test/result/{args.model_name}/{args.frame_sampling}_{args.frame_num}f.json"
+    # output path
+    if not os.path.exists(f"{PATH_DIR}/result/{args.model_name}"):
+        os.makedirs(f"{PATH_DIR}/result/{args.model_name}")
+
+    args.output_path = f"{PATH_DIR}/result/{args.model_name}/{args.frame_sampling}_{args.frame_num}f.json"
 
     return args
 
@@ -75,6 +84,7 @@ def main():
         for q_idx, q in enumerate(video_item['mc_question']):
             # question processing
             question = q["question"]
+            options = q["options"]
             video_prompt = "<i>" * video_frames.shape[0]
             prompt = f"<s> {video_prompt} {question}</s>"
             # inputs = processor(images=video_frames, text=question, return_tensors="pt")
@@ -82,25 +92,55 @@ def main():
             inputs = {k: v.to(device) for k, v in inputs.items()}
 
             # model inference
-            generated_ids = model.generate(
-                pixel_values=inputs['pixel_values'],
-                input_ids=inputs['input_ids'],
-                attention_mask=inputs['attention_mask'],
-                image_embeds=None,
-                image_embeds_position_mask=inputs["image_embeds_position_mask"],
-                use_cache=True,
-                max_new_tokens=128,
-            )
+            # generated_ids = model.generate(
+            #     pixel_values=inputs['pixel_values'],
+            #     input_ids=inputs['input_ids'],
+            #     attention_mask=inputs['attention_mask'],
+            #     image_embeds=None,
+            #     image_embeds_position_mask=inputs["image_embeds_position_mask"],
+            #     use_cache=True,
+            #     max_new_tokens=128,
+            # )
 
-            # 
+            # generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            # processed_text = processor.post_process_generation(generated_text, cleanup_and_extract=False)
 
-            generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-            processed_text = processor.post_process_generation(generated_text, cleanup_and_extract=False)
+            # get top-1 answer
+            logits = []
+            for option in options:
+                inputs = process_interleaved_example(processor, f"<s> {video_prompt} {question} {option}</s>", images=video_frames, return_tensors="pt")
+                inputs = {k: v.to(device) for k, v in inputs.items()}
+                generated_ids = model.generate(
+                    pixel_values=inputs['pixel_values'],
+                    input_ids=inputs['input_ids'],
+                    attention_mask=inputs['attention_mask'],
+                    image_embeds=None,
+                    image_embeds_position_mask=inputs["image_embeds_position_mask"],
+                    use_cache=True,
+                    max_new_tokens=args.max_new_tokens,
+                    return_dict_in_generate=True,
+                    output_scores=True
+                )
 
+                # get option's logit
+                option_ids = processor.tokenizer.encode(option, add_special_tokens=False)
+                logit = generated_ids.scores[0].squeeze(0)
+                option_logit = logit[option_ids].mean()
+                logits.append(option_logit.item())
+            
+            logits_prob = F.softmax(torch.tensor(logits), dim=0)
+            top1_idx = torch.argmax(logits_prob).item()
+            top1_answer = options[top1_idx]
+
+            # video_answers.append({
+            #     "id": q_idx,
+            #     "question": question,
+            #     "answer": processed_text
+            # })
             video_answers.append({
                 "id": q_idx,
-                "question": question,
-                "answer": processed_text
+                "answer_id": top1_idx,
+                "answer": top1_answer
             })
 
         answers[video_id] = video_answers
@@ -111,13 +151,14 @@ def main():
     
     # Evaluate the model
     # calc overall top-1
-    # top1 = calc_top1(answers, pt_db_dict)
+    top1 = calc_top1(answers, pt_db_dict)
+    print(f"Overall top-1: {top1:.2f}")
 
-
-
-            
-            
-
+    # calc top-1 by area, reasoning and tag
+    top1_by_cat = calc_top1_by_cat(answers, pt_db_dict)
+    print("Top-1 by category:")
+    for k, v in top1_by_cat.items():
+        print(f"{k}: {v[0]/v[1]:.2f}")
 
 
 if __name__ == "__main__":
