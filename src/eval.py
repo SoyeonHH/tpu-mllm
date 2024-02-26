@@ -66,7 +66,7 @@ def main():
     processor = AutoProcessor.from_pretrained(args.model_name)
 
     # Set the device
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     
     # Evaluate the model
@@ -110,23 +110,25 @@ def main():
             for option in options:
                 inputs = process_interleaved_example(processor, f"<s> {video_prompt} {question} {option}</s>", images=video_frames, return_tensors="pt")
                 inputs = {k: v.to(device) for k, v in inputs.items()}
-                generated_ids = model.generate(
-                    pixel_values=inputs['pixel_values'],
-                    input_ids=inputs['input_ids'],
-                    attention_mask=inputs['attention_mask'],
-                    image_embeds=None,
-                    image_embeds_position_mask=inputs["image_embeds_position_mask"],
-                    use_cache=True,
-                    max_new_tokens=args.max_new_tokens,
-                    return_dict_in_generate=True,
-                    output_scores=True
-                )
 
-                # get option's logit
-                option_ids = processor.tokenizer.encode(option, add_special_tokens=False)
-                logit = generated_ids.scores[0].squeeze(0)
-                option_logit = logit[option_ids].mean()
-                logits.append(option_logit.item())
+                with torch.no_grad():
+                    generated_ids = model.generate(
+                        pixel_values=inputs['pixel_values'],
+                        input_ids=inputs['input_ids'],
+                        attention_mask=inputs['attention_mask'],
+                        image_embeds=None,
+                        image_embeds_position_mask=inputs["image_embeds_position_mask"],
+                        use_cache=True,
+                        max_new_tokens=args.max_new_tokens,
+                        return_dict_in_generate=True,
+                        output_scores=True
+                    )
+
+                    # get option's logit
+                    option_ids = processor.tokenizer.encode(option, add_special_tokens=False)
+                    logit = generated_ids.scores[0].squeeze(0)
+                    option_logit = logit[option_ids].mean()
+                    logits.append(option_logit.item())
             
             logits_prob = F.softmax(torch.tensor(logits), dim=0)
             top1_idx = torch.argmax(logits_prob).item()
