@@ -19,7 +19,7 @@ from data_loader import PerceptionDataset
 from models.baseline import FreqMCVQABaseline
 
 
-PATH_DIR = "/home/soyeon/workspace/perception-test"
+PATH_DIR = "/data1/soyeon/perception-test"
 
 
 def get_args():
@@ -161,6 +161,14 @@ def main():
     print("Top-1 by category:")
     for k, v in top1_by_cat.items():
         print(f"{k}: {v[0]/v[1]:.2f}")
+
+    # save the result to json file
+    result = {
+        "overall": top1,
+        "by_category": top1_by_cat
+    }
+    with open(args.output_path.replace(".json", "_result.json"), "w") as f:
+        json.dump(result, f, indent=4)
 
 
 if __name__ == "__main__":
